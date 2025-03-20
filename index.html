@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Barbell Curl Pose Detection</title>
+  <title>Seated Dumbbell Press Pose Detection</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -186,19 +186,85 @@
       color: var(--fitflex-green);
       font-weight: bold;
     }
-        /* Add these responsive styles to the existing CSS */
-        @media (max-width: 768px) {
+    
+    .hidden {
+      display: none;
+    }
+    
+    .angle-display {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 5;
+      border: 1px solid var(--fitflex-green);
+    }
+    
+    .angle-value {
+      color: var(--fitflex-green);
+      font-weight: bold;
+    }
+    
+    .voice-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      border: 1px solid var(--fitflex-green);
+    }
+    
+    .voice-dot {
+      width: 12px;
+      height: 12px;
+      background-color: var(--fitflex-green);
+      border-radius: 50%;
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(0.8); opacity: 0.7; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0.7; }
+    }
+    
+    .voice-command-toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 100;
+      border: 1px solid var(--fitflex-green);
+      pointer-events: none;
+    }
+    
+    .voice-command-toast.show {
+      opacity: 1;
+    }
+    
+    /* Responsive styles */
+    @media (max-width: 768px) {
       .container {
         padding: 0 10px;
       }
       
-      .video-container {
+      .video-container, #controls {
         max-width: 100%;
-      }
-      
-      #controls {
-        max-width: 100%;
-        padding: 10px;
       }
       
       .button {
@@ -246,358 +312,16 @@
         font-size: 14px;
         padding: 4px 10px;
       }
-    }
-    .hidden {
-      display: none;
-    }
-    
-    .angle-display {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background-color: rgba(0, 0, 0, 0.7);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 14px;
-      z-index: 5;
-      border: 1px solid var(--fitflex-green);
-    }
-    
-    .angle-value {
-      color: var(--fitflex-green);
-      font-weight: bold;
+      
+      .voice-indicator {
+        width: 30px;
+        height: 30px;
+      }
+      
+      .voice-dot {
+        width: 8px;
+        height: 8px;
+      }
     }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="app-header">
-      <h1 class="app-title">FITFLEX</h1>
-      <p class="app-subtitle">Barbell Curl Pose Detection</p>
-    </div>
-    
-    <div class="video-container">
-      <video id="video" autoplay playsinline></video>
-      <canvas id="canvas"></canvas>
-      <div id="warning"></div>
-      <div class="angle-display">
-        Left: <span id="left-angle" class="angle-value">0°</span> | 
-        Right: <span id="right-angle" class="angle-value">0°</span>
-      </div>
-    </div>
-    
-    <div id="controls">
-      <div class="timer" id="exercise-time">00:00</div>
-      <button id="start-button" class="button start">Start Workout</button>
-      <button id="stop-button" class="button stop hidden">End Workout</button>
-      <button id="reset-button" class="button reset hidden">Reset</button>
-    </div>
-    
-    <div id="results">
-      <h2 class="results-title">Workout Complete</h2>
-      <div class="stats-container">
-        <div class="stat-row">
-          <span class="stat-label">Total Time:</span>
-          <span id="total-time" class="stat-value">00:00</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Total Reps:</span>
-          <span id="rep-count" class="stat-value">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Total Mistakes:</span>
-          <span id="mistake-count" class="stat-value">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Mistakes per Min:</span>
-          <span id="mistake-rate" class="stat-value">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Form Quality:</span>
-          <span id="form-quality" class="stat-value">Good</span>
-        </div>
-      </div>
-      <button id="close-results" class="button close">Close</button>
-    </div>
-  </div>
-  
-  <script>
-    // DOM Elements
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const warningText = document.getElementById('warning');
-    const exerciseTimeElement = document.getElementById('exercise-time');
-    const totalTimeElement = document.getElementById('total-time');
-    const repCountElement = document.getElementById('rep-count');
-    const mistakeCountElement = document.getElementById('mistake-count');
-    const mistakeRateElement = document.getElementById('mistake-rate');
-    const formQualityElement = document.getElementById('form-quality');
-    const startButton = document.getElementById('start-button');
-    const stopButton = document.getElementById('stop-button');
-    const resetButton = document.getElementById('reset-button');
-    const resultsPanel = document.getElementById('results');
-    const closeResultsButton = document.getElementById('close-results');
-    const leftAngleElement = document.getElementById('left-angle');
-    const rightAngleElement = document.getElementById('right-angle');
-
-    // State variables
-    let mistakeCount = 0;
-    let repCount = 0;
-    let isInMistakeState = false;
-    let exerciseStartTime = 0;
-    let exerciseTimer;
-    let isExercising = false;
-    let totalExerciseTime = 0;
-    let isInUpPosition = false;
-    let lastWarningTime = 0;
-
-    // Initialize pose detection
-    const pose = new Pose({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-
-    // Setup camera
-    function setupCamera() {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          video.srcObject = stream;
-          video.onloadedmetadata = () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            video.play();
-          };
-        })
-        .catch(err => {
-          console.error('Error accessing the camera: ', err);
-          warningText.innerText = 'Camera access denied. Please allow camera access and reload.';
-        });
-    }
-
-    // Button event listeners
-    startButton.addEventListener('click', startExercise);
-    stopButton.addEventListener('click', stopExercise);
-    resetButton.addEventListener('click', resetExercise);
-    closeResultsButton.addEventListener('click', closeResults);
-
-    function startExercise() {
-      isExercising = true;
-      mistakeCount = 0;
-      repCount = 0;
-      isInMistakeState = false;
-      
-      // Update UI
-      startButton.classList.add('hidden');
-      stopButton.classList.remove('hidden');
-      resetButton.classList.add('hidden');
-      
-      // Start timer
-      exerciseStartTime = Date.now();
-      exerciseTimer = setInterval(updateExerciseTime, 1000);
-    }
-
-    function stopExercise() {
-      isExercising = false;
-      clearInterval(exerciseTimer);
-      
-      // Calculate total time in seconds
-      totalExerciseTime = Math.floor((Date.now() - exerciseStartTime) / 1000);
-      
-      // Update UI
-      stopButton.classList.add('hidden');
-      resetButton.classList.remove('hidden');
-      
-      // Show results
-      displayResults();
-    }
-
-    function resetExercise() {
-      resetButton.classList.add('hidden');
-      startButton.classList.remove('hidden');
-      exerciseTimeElement.textContent = "00:00";
-      warningText.innerText = "";
-    }
-
-    function displayResults() {
-      const minutes = Math.floor(totalExerciseTime / 60);
-      const seconds = totalExerciseTime % 60;
-      totalTimeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      repCountElement.textContent = repCount;
-      mistakeCountElement.textContent = mistakeCount;
-      
-      const mistakesPerMinute = totalExerciseTime > 0 ?
-        ((mistakeCount / totalExerciseTime) * 60).toFixed(2) : 0;
-      mistakeRateElement.textContent = mistakesPerMinute;
-      
-      // Calculate form quality
-      let formQuality = "Excellent";
-      if (mistakeCount > repCount * 0.5) {
-        formQuality = "Poor";
-      } else if (mistakeCount > repCount * 0.2) {
-        formQuality = "Fair";
-      } else if (mistakeCount > repCount * 0.1) {
-        formQuality = "Good";
-      }
-      formQualityElement.textContent = formQuality;
-      
-      resultsPanel.style.display = 'block';
-    }
-
-    function closeResults() {
-      resultsPanel.style.display = 'none';
-    }
-
-    function updateExerciseTime() {
-      const elapsedTime = Math.floor((Date.now() - exerciseStartTime) / 1000);
-      const minutes = Math.floor(elapsedTime / 60);
-      const seconds = elapsedTime % 60;
-      exerciseTimeElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-
-    function calculateAngle(a, b, c) {
-      const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-      let angle = Math.abs(radians * 180.0 / Math.PI);
-      if (angle > 180.0) {
-        angle = 360 - angle;
-      }
-      return angle;
-    }
-
-    function detectBarbellCurl(landmarks) {
-      // Get relevant landmarks
-      const leftShoulder = landmarks[11];
-      const leftElbow = landmarks[13];
-      const leftWrist = landmarks[15];
-      
-      const rightShoulder = landmarks[12];
-      const rightElbow = landmarks[14];
-      const rightWrist = landmarks[16];
-      
-      // Calculate angles
-      const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
-      const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
-      
-      // Update angle display
-      leftAngleElement.textContent = `${Math.round(leftElbowAngle)}°`;
-      rightAngleElement.textContent = `${Math.round(rightElbowAngle)}°`;
-      
-      // Check for proper form
-      if (isExercising) {
-        // Define acceptable angle ranges for barbell curl
-        const minAngle = 40;  // Minimum angle when arms are bent (up position)
-        const maxAngle = 160; // Maximum angle when arms are straight (down position)
-        
-        // Check if both arms are in up position (biceps contracted)
-        const isLeftArmUp = leftElbowAngle < minAngle + 20;
-        const isRightArmUp = rightElbowAngle < minAngle + 20;
-        
-        // Check if both arms are in down position (arms extended)
-        const isLeftArmDown = leftElbowAngle > maxAngle - 20;
-        const isRightArmDown = rightElbowAngle > maxAngle - 20;
-        
-        // Rep counting logic
-        if (isLeftArmUp && isRightArmUp && !isInUpPosition) {
-          isInUpPosition = true;
-          repCount++;
-        } else if (isLeftArmDown && isRightArmDown && isInUpPosition) {
-          isInUpPosition = false;
-        }
-        
-        // Form checking
-        let isMistake = false;
-        let warningMessage = "";
-        
-        // Check if elbows are too far from body
-        if (leftElbow.x < leftShoulder.x - 0.1 || rightElbow.x > rightShoulder.x + 0.1) {
-          isMistake = true;
-          warningMessage = "Keep elbows close to your body";
-        }
-        
-        // Check if shoulders are raised (simplified check)
-        const leftShoulderHeight = leftShoulder.y;
-        const rightShoulderHeight = rightShoulder.y;
-        const initialLeftShoulderHeight = 0.3; // Approximate value, should be calibrated
-        const initialRightShoulderHeight = 0.3; // Approximate value, should be calibrated
-        
-        if (leftShoulderHeight < initialLeftShoulderHeight - 0.05 || 
-            rightShoulderHeight < initialRightShoulderHeight - 0.05) {
-          isMistake = true;
-          warningMessage = "Keep shoulders down";
-        }
-        
-        // Display warning if there's a mistake
-        if (isMistake) {
-          const currentTime = Date.now();
-          if (!isInMistakeState || currentTime - lastWarningTime > 2000) {
-            warningText.innerText = warningMessage;
-            lastWarningTime = currentTime;
-            
-            if (!isInMistakeState) {
-              mistakeCount++;
-              isInMistakeState = true;
-            }
-          }
-        } else {
-          if (isInMistakeState) {
-            warningText.innerText = "";
-            isInMistakeState = false;
-          }
-        }
-      }
-    }
-
-    // Process results from pose detection
-    pose.onResults(results => {
-      // Draw the pose
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-      
-      if (results.poseLandmarks) {
-        // Draw pose landmarks
-        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-          color: '#00FF7F',
-          lineWidth: 4
-        });
-        drawLandmarks(ctx, results.poseLandmarks, {
-          color: '#FFFFFF',
-          lineWidth: 2,
-          radius: 6
-        });
-        
-        // Process the pose for barbell curl detection
-        detectBarbellCurl(results.poseLandmarks);
-      }
-    });
-
-    // Initialize
-    setupCamera();
-    
-    // Start the pose detection
-    const camera = new Camera(video, {
-      onFrame: async () => {
-        await pose.send({image: video});
-      },
-      width: 640,
-      height: 480
-    });
-    camera.start();
-    
-    // Handle window resize for responsiveness
-    window.addEventListener('resize', handleResize);
-    
-    function handleResize() {
-      // Adjust canvas size if needed
-      if (video.videoWidth > 0) {
-        const containerWidth = document.querySelector('.video-container').clientWidth;
-        const scale = containerWidth / video.videoWidth;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
-    }
-  </script>
-</body>
-</html>
