@@ -8,90 +8,211 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; }
-        video, canvas { position: absolute; left: 50%; transform: translateX(-50%); top: 10%; }
-        #warning { position: absolute; top: 5%; left: 50%; transform: translateX(-50%); color: red; font-size: 24px; font-weight: bold; }
+        /* FitFlex Theme - Black and Green */
+        :root {
+            --fitflex-green: #00FF7F;
+            --fitflex-dark: #121212;
+            --fitflex-darker: #0A0A0A;
+            --fitflex-light-dark: #1E1E1E;
+        }
+
+        body { 
+            font-family: 'Arial', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--fitflex-darker);
+            color: white;
+        }
+
+        .container { 
+            position: relative; 
+            width: 100%; 
+            height: 100vh; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .app-header {
+            width: 100%;
+            background-color: var(--fitflex-dark);
+            padding: 12px 0;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 255, 127, 0.2);
+        }
+
+        .app-title {
+            color: var(--fitflex-green);
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin-top: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid var(--fitflex-green);
+        }
+
+        video, canvas { 
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .voice-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: var(--fitflex-green);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--fitflex-green);
+            z-index: 5;
+        }
+
+        .voice-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--fitflex-green);
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.7; }
+        }
+
+        #controls { 
+            margin-top: 20px;
+            width: 100%;
+            max-width: 640px;
+            background-color: var(--fitflex-light-dark);
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .button { 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 30px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 16px;
+        }
+
+        .start { background-color: var(--fitflex-green); color: var(--fitflex-dark); }
+        .stop { background-color: #FF3B30; color: white; }
+        .reset { background-color: #007AFF; color: white; }
+        .hidden { display: none; }
+
     </style>
 </head>
 <body>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-    <div id="warning"></div>
-    <audio id="audio" src="elbow_forward.mp3" preload="auto"></audio> <!-- Preload audio -->
-    
+    <div class="container">
+        <div class="app-header">
+            <h1 class="app-title">FITFLEX</h1>
+        </div>
+
+        <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <div class="voice-indicator">
+                <div class="voice-dot"></div>
+                Voice Control Active
+            </div>
+        </div>
+
+        <div id="controls">
+            <button id="start-button" class="button start">Start</button>
+            <button id="stop-button" class="button stop hidden">End</button>
+            <button id="reset-button" class="button reset hidden">Reset</button>
+        </div>
+    </div>
+
     <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const warningText = document.getElementById('warning');
-        const audio = document.getElementById('audio'); // Audio element
-        
-        const pose = new Pose({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        // DOM Elements
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+        const resetButton = document.getElementById('reset-button');
+        let isExercising = false;
+        let recognition = null;
 
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            video.srcObject = stream;
-            video.onloadedmetadata = () => {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            };
-        });
+        // Button event listeners
+        startButton.addEventListener('click', startExercise);
+        stopButton.addEventListener('click', stopExercise);
+        resetButton.addEventListener('click', resetExercise);
 
-        function calculateAngle(a, b, c) {
-            const ba = { x: a.x - b.x, y: a.y - b.y };
-            const bc = { x: c.x - b.x, y: c.y - b.y };
-            const dotProduct = ba.x * bc.x + ba.y * bc.y;
-            const magnitudeBA = Math.sqrt(ba.x ** 2 + ba.y ** 2);
-            const magnitudeBC = Math.sqrt(bc.x ** 2 + bc.y ** 2);
-            const angle = Math.acos(dotProduct / (magnitudeBA * magnitudeBC)) * (180 / Math.PI);
-            return angle;
-        }
+        // Initialize speech recognition
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = false;
 
-        pose.onResults(results => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                recognition.onresult = function(event) {
+                    const last = event.results.length - 1;
+                    const command = event.results[last][0].transcript.trim().toLowerCase();
+                    console.log('Voice command:', command);
 
-            if (results.poseLandmarks) {
-                drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
-                drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2 });
-
-                const landmarks = results.poseLandmarks;
-
-                const leftShoulder = landmarks[11]; 
-                const rightShoulder = landmarks[12];
-                const leftElbow = landmarks[13]; 
-                const rightElbow = landmarks[14];
-
-                const midpointShoulder = { 
-                    x: (leftShoulder.x + rightShoulder.x) / 2, 
-                    y: (leftShoulder.y + rightShoulder.y) / 2 
+                    if (command === 'start') {
+                        if (!isExercising) startExercise();
+                    } else if (command === 'stop' || command === 'end') {
+                        if (isExercising) stopExercise();
+                    } else if (command === 'reset') {
+                        resetExercise();
+                    }
                 };
 
-                const leftElbowAngle = calculateAngle(leftShoulder, midpointShoulder, leftElbow);
-                const rightElbowAngle = calculateAngle(rightShoulder, midpointShoulder, rightElbow);
+                recognition.onerror = function(event) {
+                    console.log('Error:', event.error);
+                };
 
-                // Display angles
-                ctx.fillStyle = "white";
-                ctx.font = "18px Arial";
-                ctx.fillText(`Left Elbow: ${Math.round(leftElbowAngle)}`, 50, 50);
-                ctx.fillText(`Right Elbow: ${Math.round(rightElbowAngle)}`, 400, 50);
+                recognition.onend = function() {
+                    recognition.start(); // Restart to keep continuous listening
+                };
 
-                // Play warning if elbow is too forward
-                if ((leftElbowAngle < 30 || leftElbowAngle > 60 || rightElbowAngle < 30 || rightElbowAngle > 60) && audio.paused) {
-                    warningText.innerText = "Elbow Too Forward!";
-                    audio.play();
-                } else if (leftElbowAngle >= 30 && leftElbowAngle <= 60 && rightElbowAngle >= 30 && rightElbowAngle <= 60) {
-                    warningText.innerText = "";
-                }
+                recognition.start();
+            } else {
+                console.log('Speech Recognition not supported');
+                document.querySelector('.voice-indicator').style.display = 'none';
             }
-        });
+        }
 
-        const camera = new Camera(video, {
-            onFrame: async () => { await pose.send({ image: video }); },
-            width: 640,
-            height: 480
-        });
-        camera.start();
+        function startExercise() {
+            isExercising = true;
+            startButton.classList.add('hidden');
+            stopButton.classList.remove('hidden');
+            resetButton.classList.add('hidden');
+        }
+
+        function stopExercise() {
+            isExercising = false;
+            stopButton.classList.add('hidden');
+            resetButton.classList.remove('hidden');
+        }
+
+        function resetExercise() {
+            startButton.classList.remove('hidden');
+            stopButton.classList.add('hidden');
+            resetButton.classList.add('hidden');
+        }
+
+        // Start speech recognition
+        initSpeechRecognition();
     </script>
 </body>
 </html>
