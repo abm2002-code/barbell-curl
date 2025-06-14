@@ -22,8 +22,8 @@
       <canvas id="canvas"></canvas>
       <div id="warning"></div>
       <div class="angle-display">
-        Left: <span id="left-angle" class="angle-value">0°</span> | 
-        Right: <span id="right-angle" class="angle-value">0°</span>
+        Left: <span id="left-angle" class="angle-value">0Â°</span> | 
+        Right: <span id="right-angle" class="angle-value">0Â°</span>
       </div>
     </div>
     
@@ -137,9 +137,7 @@
           beginWorkout();
         }
       }, 1000);
-    }
-
-    function stopExercise() {
+    }    function stopExercise() {
       isExercising = false;
       clearInterval(exerciseTimer);
       
@@ -152,6 +150,9 @@
       
       // Show results
       displayResults();
+      
+      // Send detailed workout data to React Native app
+      sendWorkoutDataToApp();
     }
 
     function resetExercise() {
@@ -190,7 +191,55 @@
       const magnitudeBA = Math.sqrt(ba.x ** 2 + ba.y ** 2);
       const magnitudeBC = Math.sqrt(bc.x ** 2 + bc.y ** 2);
       const angle = Math.acos(dotProduct / (magnitudeBA * magnitudeBC)) * (180 / Math.PI);
-      return angle;
+      return angle;    }
+
+    // Function to send detailed workout data to React Native app
+    function sendWorkoutDataToApp() {
+      try {
+        // Calculate additional metrics
+        const mistakesPerMinute = totalExerciseTime > 0 ? (mistakeCount / (totalExerciseTime / 60)) : 0;
+        const averageFormScore = Math.max(0, Math.min(100, 100 - (mistakeCount * 8))); // Simple form score calculation
+        const estimatedCalories = Math.round(totalExerciseTime * 0.08 + repCount * 0.3); // Calorie estimation
+        
+        const workoutData = {
+          type: 'workoutCompleted',
+          exerciseType: 'barbell_curl',
+          duration: totalExerciseTime,
+          repsCompleted: repCount,
+          totalMistakes: mistakeCount,
+          mistakesPerMinute: parseFloat(mistakesPerMinute.toFixed(1)),
+          averageFormScore: Math.round(averageFormScore),
+          caloriesBurned: estimatedCalories,
+          workoutNotes: `barbell curl completed with ${repCount} reps and ${mistakeCount} form corrections`,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Send data via postMessage (for React Native WebView)
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(workoutData));
+        }
+        
+        // Also send via console.log for the injected JavaScript to catch
+        console.log('Workout completed:', JSON.stringify(workoutData));
+        
+        // Log individual metrics for the regex patterns in WebView
+        console.log(`reps: ${repCount}`);
+        console.log(`mistakes: ${mistakeCount}`);
+        console.log(`form score: ${averageFormScore}`);
+        console.log(`calories: ${estimatedCalories}`);
+        
+      } catch (error) {
+        console.error('Error sending workout data:', error);
+        // Fallback - just send basic completion signal
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'workoutCompleted',
+            reps: repCount,
+            mistakes: mistakeCount,
+            duration: totalExerciseTime
+          }));
+        }
+      }
     }
 
     pose.onResults(results => {
@@ -210,8 +259,8 @@
         };
         const leftElbowAngle = calculateAngle(leftShoulder, midpointShoulder, leftElbow);
         const rightElbowAngle = calculateAngle(rightShoulder, midpointShoulder, rightElbow);
-        leftAngleElement.textContent = `${Math.round(leftElbowAngle)}°`;
-        rightAngleElement.textContent = `${Math.round(rightElbowAngle)}°`;
+        leftAngleElement.textContent = `${Math.round(leftElbowAngle)}Â°`;
+        rightAngleElement.textContent = `${Math.round(rightElbowAngle)}Â°`;
 
         if (isExercising) {
           const isMistake = leftElbowAngle < 30 || leftElbowAngle > 60 || rightElbowAngle < 30 || rightElbowAngle > 60;
