@@ -191,27 +191,16 @@
       const magnitudeBA = Math.sqrt(ba.x ** 2 + ba.y ** 2);
       const magnitudeBC = Math.sqrt(bc.x ** 2 + bc.y ** 2);
       const angle = Math.acos(dotProduct / (magnitudeBA * magnitudeBC)) * (180 / Math.PI);
-      return angle;    }
-
+      return angle;    }    // Function to send detailed workout data to React Native app
+    
     // Function to send detailed workout data to React Native app
     function sendWorkoutDataToApp() {
       try {
-        // Calculate additional metrics
-        const mistakesPerMinute = totalExerciseTime > 0 ? (mistakeCount / (totalExerciseTime / 60)) : 0;
-        const averageFormScore = Math.max(0, Math.min(100, 100 - (mistakeCount * 8))); // Simple form score calculation
-        const estimatedCalories = Math.round(totalExerciseTime * 0.08 + repCount * 0.3); // Calorie estimation
-        
         const workoutData = {
           type: 'workoutCompleted',
           exerciseType: 'barbell_curl',
           duration: totalExerciseTime,
-          repsCompleted: repCount,
-          totalMistakes: mistakeCount,
-          mistakesPerMinute: parseFloat(mistakesPerMinute.toFixed(1)),
-          averageFormScore: Math.round(averageFormScore),
-          caloriesBurned: estimatedCalories,
-          workoutNotes: `barbell curl completed with ${repCount} reps and ${mistakeCount} form corrections`,
-          timestamp: new Date().toISOString()
+          totalMistakes: mistakeCount
         };
         
         // Send data via postMessage (for React Native WebView)
@@ -222,21 +211,15 @@
         // Also send via console.log for the injected JavaScript to catch
         console.log('Workout completed:', JSON.stringify(workoutData));
         
-        // Log individual metrics for the regex patterns in WebView
-        console.log(`reps: ${repCount}`);
-        console.log(`mistakes: ${mistakeCount}`);
-        console.log(`form score: ${averageFormScore}`);
-        console.log(`calories: ${estimatedCalories}`);
-        
       } catch (error) {
         console.error('Error sending workout data:', error);
         // Fallback - just send basic completion signal
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'workoutCompleted',
-            reps: repCount,
-            mistakes: mistakeCount,
-            duration: totalExerciseTime
+            exerciseType: 'barbell_curl',
+            duration: totalExerciseTime,
+            totalMistakes: mistakeCount
           }));
         }
       }
